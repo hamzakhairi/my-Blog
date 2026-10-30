@@ -1,0 +1,29 @@
+[
+    {
+        "slug": "devhub",
+        "title": "Hack The Box devhub — Full Writeup",
+        "description": "A complete step-by-step penetration testing walkthrough of the HTB devhub machine.",
+        "category": "WRITEUP",
+        "author": {
+            "name": "Hamza khairi",
+            "initials": "HK"
+        },
+        "date": "2026-09-26",
+        "readTime": "10 min read",
+        "tags": [
+            "HTB",
+            "Devhub",
+            "Linux",
+            "Medium",
+            "Web",
+            "Privilege Escalation"
+        ],
+        "cover": "/HTB/devhub/devhub.png",
+        "box": {
+            "os": "Linux",
+            "difficulty": "Medium",
+            "points": 30,
+            "released": "2026-09-26"
+        }
+    }
+]
